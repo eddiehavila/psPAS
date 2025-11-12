@@ -456,7 +456,23 @@ function New-PASSession {
 		$LogonRequest['Method'] = 'POST'
 		# For SAMLAuth2, use the provided WebSession instead of creating a new one
 		if ($PSCmdlet.ParameterSetName -eq 'Gen2SAMLAuth2') {
+			Write-Verbose "[SAMLAuth2] Using provided WebSession for authentication"
 			$LogonRequest['WebSession'] = $WebSession
+			# Log cookie information
+			if ($WebSession.Cookies) {
+				try {
+					$cookieCount = @($WebSession.Cookies.GetCookies($baseURI)).Count
+					Write-Verbose "[SAMLAuth2] WebSession contains $cookieCount cookie(s) for base URI: $baseURI"
+					foreach ($cookie in $WebSession.Cookies.GetCookies($baseURI)) {
+						$cookieValuePreview = if ($cookie.Value.Length -gt 20) { $cookie.Value.Substring(0, 20) + "..." } else { $cookie.Value }
+						Write-Verbose "[SAMLAuth2]   Cookie: $($cookie.Name) = $cookieValuePreview (Domain: $($cookie.Domain), Path: $($cookie.Path), Secure: $($cookie.Secure), HttpOnly: $($cookie.HttpOnly))"
+					}
+				} catch {
+					Write-Verbose "[SAMLAuth2] Could not enumerate cookies: $($_.Exception.Message)"
+				}
+			} else {
+				Write-Verbose "[SAMLAuth2] WARNING: WebSession has no Cookies collection"
+			}
 		} else {
 			$LogonRequest['SessionVariable'] = 'PASSession'
 		}
@@ -579,22 +595,48 @@ function New-PASSession {
 
 			'Gen2SAMLAuth2' {
 
+				Write-Verbose "[SAMLAuth2] ========== Entering Gen2SAMLAuth2 authentication flow =========="
+				Write-Verbose "[SAMLAuth2] Target Base URI: $Uri"
+
 				#*For SAML auth with pre-authenticated WebSession
 				#The WebSession already contains the necessary cookies
 				#The expected parameters are concurrentSession & SAMLResponse
 				$boundParameters = $PSBoundParameters | Get-PASParameter -ParametersToKeep concurrentSession, SAMLResponse
+				Write-Verbose "[SAMLAuth2] Collecting bound parameters: concurrentSession=$(if ($PSBoundParameters.ContainsKey('concurrentSession')) { $PSBoundParameters['concurrentSession'] } else { 'not provided' })"
+				Write-Verbose "[SAMLAuth2] SAMLResponse provided: $(if ($PSBoundParameters.ContainsKey('SAMLResponse')) { 'Yes (length: ' + $PSBoundParameters['SAMLResponse'].Length + ')' } else { 'No' })"
 
 				#add required parameters
 				$boundParameters.Add('apiUse', $true)
+				Write-Verbose "[SAMLAuth2] Added required parameter: apiUse = true"
 
 				#If no SAMLResponse provided, include empty string (cookies may be sufficient)
 				if ( -not ($PSBoundParameters.ContainsKey('SAMLResponse'))) {
 					$boundParameters.Add('SAMLResponse', '')
+					Write-Verbose "[SAMLAuth2] No SAMLResponse provided - adding empty string (cookies should be sufficient)"
+				}
+
+				# Log final request configuration
+				Write-Verbose "[SAMLAuth2] Final request body parameters:"
+				foreach ($key in $boundParameters.Keys) {
+					if ($key -eq 'SAMLResponse') {
+						if ($boundParameters[$key] -and $boundParameters[$key].Length -gt 0) {
+							$samlPreview = if ($boundParameters[$key].Length -gt 50) { $boundParameters[$key].Substring(0, 50) + "..." } else { $boundParameters[$key] }
+							Write-Verbose "[SAMLAuth2]   $key = $samlPreview (length: $($boundParameters[$key].Length))"
+						} else {
+							Write-Verbose "[SAMLAuth2]   $key = (empty string)"
+						}
+					} else {
+						Write-Verbose "[SAMLAuth2]   $key = $($boundParameters[$key])"
+					}
 				}
 
 				$LogonRequest['Body'] = $boundParameters
 				$LogonRequest['ContentType'] = 'application/x-www-form-urlencoded'
+				Write-Verbose "[SAMLAuth2] Request Content-Type: application/x-www-form-urlencoded"
 				$LogonRequest['Uri'] = "$Uri/api/auth/SAML/Logon"
+				Write-Verbose "[SAMLAuth2] Request URI: $($LogonRequest['Uri'])"
+				Write-Verbose "[SAMLAuth2] WebSession: $(if ($LogonRequest.ContainsKey('WebSession')) { 'Using provided WebSession' } else { 'WARNING: No WebSession!' })"
+				Write-Verbose "[SAMLAuth2] ========== Submitting authentication request =========="
 				break
 
 			}
@@ -713,6 +755,14 @@ function New-PASSession {
 					default {
 						#Send Logon Request
 						$PASSession = Invoke-PASRestMethod @LogonRequest
+					if ($PSCmdlet.ParameterSetName -eq 'Gen2SAMLAuth2') {
+						Write-Verbose "[SAMLAuth2] Authentication request completed"
+						if ($PASSession) {
+							Write-Verbose "[SAMLAuth2] Received response from server"
+						} else {
+							Write-Verbose "[SAMLAuth2] WARNING: No response received from server"
+						}
+					}
 						break
 					}
 				}
@@ -753,6 +803,20 @@ function New-PASSession {
 				}
 
 			} catch {
+
+				if ($PSCmdlet.ParameterSetName -eq 'Gen2SAMLAuth2') {
+					Write-Verbose "[SAMLAuth2] ========== Authentication ERROR =========="
+					Write-Verbose "[SAMLAuth2] Error ID: $($PSItem.FullyQualifiedErrorId)"
+					Write-Verbose "[SAMLAuth2] Error Message: $($PSItem.Exception.Message)"
+					if ($PSItem.ErrorDetails) {
+						Write-Verbose "[SAMLAuth2] Error Details: $($PSItem.ErrorDetails)"
+					}
+					if ($PSItem.Exception.Response) {
+						Write-Verbose "[SAMLAuth2] Status Code: $($PSItem.Exception.Response.StatusCode.value__)"
+					}
+					Write-Verbose "[SAMLAuth2] ========================================="
+				}
+
 
 				if ($PSItem.FullyQualifiedErrorId -notmatch 'ITATS542I') {
 
