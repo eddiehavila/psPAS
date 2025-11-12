@@ -682,6 +682,25 @@ function New-PASSession {
 				$LogonRequest['Uri'] = "$Uri/api/auth/SAML/Logon"
 				Write-Verbose "[SAMLAuth2] Request URI: $($LogonRequest['Uri'])"
 				Write-Verbose "[SAMLAuth2] WebSession: $(if ($LogonRequest.ContainsKey('WebSession')) { 'Using provided WebSession' } else { 'WARNING: No WebSession!' })"
+
+				# Show which cookies will actually be sent with this request
+				if ($LogonRequest.ContainsKey('WebSession') -and $LogonRequest['WebSession'].Cookies) {
+					try {
+						$requestUri = [System.Uri]$LogonRequest['Uri']
+						$cookiesForRequest = @($LogonRequest['WebSession'].Cookies.GetCookies($requestUri))
+						Write-Verbose "[SAMLAuth2] Cookies that will be sent with request: $($cookiesForRequest.Count)"
+						foreach ($cookie in $cookiesForRequest) {
+							$cookieValuePreview = if ($cookie.Value.Length -gt 20) { $cookie.Value.Substring(0, 20) + "..." } else { $cookie.Value }
+							Write-Verbose "[SAMLAuth2]   -> $($cookie.Name) = $cookieValuePreview"
+						}
+						if ($cookiesForRequest.Count -eq 0) {
+							Write-Verbose "[SAMLAuth2] WARNING: No cookies match the request URI! Check domain/path settings."
+						}
+					} catch {
+						Write-Verbose "[SAMLAuth2] Could not determine cookies for request: $($_.Exception.Message)"
+					}
+				}
+
 				Write-Verbose "[SAMLAuth2] ========== Submitting authentication request =========="
 				break
 
