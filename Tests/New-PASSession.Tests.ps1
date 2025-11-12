@@ -875,6 +875,102 @@ Describe $($PSCommandPath -Replace '.Tests.ps1') {
 
 		}
 
+
+		Context 'Gen2SAMLAuth2' {
+
+			BeforeEach {
+
+				Mock Invoke-PASRestMethod -MockWith {
+					[PSCustomObject]@{
+						'CyberArkLogonResult' = 'AAAAAAA\\\REEEAAAAALLLLYYYYY\\\\LOOOOONNNNGGGGG\\\ACCCCCEEEEEEEESSSSSSS\\\\\\\TTTTTOOOOOKKKKKEEEEEN'
+					}
+				}
+
+				Mock Get-PASServer -MockWith {
+					[PSCustomObject]@{
+						ExternalVersion = '6.6.6'
+					}
+				}
+
+				Mock Get-PASLoggedOnUser -MockWith {
+					@{'UserName' = 'SomeUser' }
+				}
+
+				Mock Set-Variable -MockWith { }
+
+				$psPASSession.ExternalVersion = '0.0'
+				$psPASSession.WebSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+
+				# Create a test WebSession with cookies
+				$testWebSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+				$cookie = New-Object System.Net.Cookie
+				$cookie.Name = 'TestCookie'
+				$cookie.Value = 'TestValue'
+				$cookie.Domain = 'P_URI'
+				$testWebSession.Cookies.Add($cookie)
+
+			}
+
+			It 'sends request with WebSession' {
+				New-PASSession -BaseURI 'https://P_URI' -SAMLAuth2 -WebSession $testWebSession -SAMLResponse 'TestSAMLToken'
+				Assert-MockCalled Invoke-PASRestMethod -Times 1 -Exactly -Scope It
+
+			}
+
+			It 'uses the provided WebSession' {
+
+				New-PASSession -BaseURI 'https://P_URI' -SAMLAuth2 -WebSession $testWebSession -SAMLResponse 'TestSAMLToken'
+				Assert-MockCalled Invoke-PASRestMethod -ParameterFilter {
+					$null -ne $WebSession
+				} -Times 1 -Exactly -Scope It
+
+			}
+
+			It 'sends expected request to expected endpoint' {
+
+				New-PASSession -BaseURI 'https://P_URI' -SAMLAuth2 -WebSession $testWebSession -SAMLResponse 'TestSAMLToken'
+				Assert-MockCalled Invoke-PASRestMethod -ParameterFilter {
+
+					$URI -eq 'https://P_URI/PasswordVault/api/Auth/SAML/Logon'
+					$ContentType -eq 'application/x-www-form-urlencoded'
+					$Body['SAMLResponse'] -eq 'TestSAMLToken'
+					$Body['apiUse'] -eq $true
+
+				} -Times 1 -Exactly -Scope It
+
+			}
+
+			It 'includes empty SAMLResponse when not provided' {
+
+				New-PASSession -BaseURI 'https://P_URI' -SAMLAuth2 -WebSession $testWebSession
+				Assert-MockCalled Invoke-PASRestMethod -ParameterFilter {
+
+					$Body['SAMLResponse'] -eq ''
+					$Body['apiUse'] -eq $true
+
+				} -Times 1 -Exactly -Scope It
+
+			}
+
+			It 'supports concurrentSession parameter' {
+
+				New-PASSession -BaseURI 'https://P_URI' -SAMLAuth2 -WebSession $testWebSession -SAMLResponse 'TestSAMLToken' -concurrentSession $true
+				Assert-MockCalled Invoke-PASRestMethod -ParameterFilter {
+
+					$Body['concurrentSession'] -eq $true
+
+				} -Times 1 -Exactly -Scope It
+
+			}
+
+			It 'sets expected authorization header' {
+
+				New-PASSession -BaseURI 'https://P_URI' -SAMLAuth2 -WebSession $testWebSession -SAMLResponse 'TestSAMLToken'
+				$psPASSession.WebSession.Headers['Authorization'] | Should -Be 'AAAAAAA\\\REEEAAAAALLLLYYYYY\\\\LOOOOONNNNGGGGG\\\ACCCCCEEEEEEEESSSSSSS\\\\\\\TTTTTOOOOOKKKKKEEEEEN'
+
+			}
+
+		}
 		Context 'SharedServices-URL-ServiceUser' {
 
 			BeforeEach {

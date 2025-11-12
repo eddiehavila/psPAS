@@ -105,6 +105,12 @@ function New-PASSession {
 			Mandatory = $true,
 			ValueFromPipeline = $false,
 			ValueFromPipelinebyPropertyName = $true,
+			ParameterSetName = 'Gen2SAMLAuth2'
+		)]
+		[parameter(
+			Mandatory = $true,
+			ValueFromPipeline = $false,
+			ValueFromPipelinebyPropertyName = $true,
 			ParameterSetName = 'shared'
 		)]
 		[parameter(
@@ -212,10 +218,32 @@ function New-PASSession {
 		[switch]$SAMLAuth,
 
 		[Parameter(
+			Mandatory = $true,
+			ValueFromPipeline = $false,
+			ValueFromPipelinebyPropertyName = $true,
+			ParameterSetName = 'Gen2SAMLAuth2'
+		)]
+		[switch]$SAMLAuth2,
+
+		[Parameter(
+			Mandatory = $true,
+			ValueFromPipeline = $false,
+			ValueFromPipelinebyPropertyName = $true,
+			ParameterSetName = 'Gen2SAMLAuth2'
+		)]
+		[Microsoft.PowerShell.Commands.WebRequestSession]$WebSession,
+
+		[Parameter(
 			Mandatory = $false,
 			ValueFromPipeline = $false,
 			ValueFromPipelinebyPropertyName = $true,
 			ParameterSetName = 'Gen2SAML'
+		)]
+		[Parameter(
+			Mandatory = $false,
+			ValueFromPipeline = $false,
+			ValueFromPipelinebyPropertyName = $true,
+			ParameterSetName = 'Gen2SAMLAuth2'
 		)]
 		[Parameter(
 			Mandatory = $true,
@@ -348,6 +376,12 @@ function New-PASSession {
 			ValueFromPipelinebyPropertyName = $true,
 			ParameterSetName = 'Gen2SAML'
 		)]
+		[Parameter(
+			Mandatory = $false,
+			ValueFromPipeline = $false,
+			ValueFromPipelinebyPropertyName = $true,
+			ParameterSetName = 'Gen2SAMLAuth2'
+		)]
 		[Boolean]$concurrentSession,
 
 		[Parameter(
@@ -420,7 +454,12 @@ function New-PASSession {
 
 		#Define Logon Request Parameters
 		$LogonRequest['Method'] = 'POST'
-		$LogonRequest['SessionVariable'] = 'PASSession'
+		# For SAMLAuth2, use the provided WebSession instead of creating a new one
+		if ($PSCmdlet.ParameterSetName -eq 'Gen2SAMLAuth2') {
+			$LogonRequest['WebSession'] = $WebSession
+		} else {
+			$LogonRequest['SessionVariable'] = 'PASSession'
+		}
 		$LogonRequest['UseDefaultCredentials'] = $UseDefaultCredentials.IsPresent
 		$LogonRequest['SkipCertificateCheck'] = $SkipCertificateCheck.IsPresent
 
@@ -529,6 +568,28 @@ function New-PASSession {
 					#add SAMLResponse to boundParameters
 					$boundParameters.Add('SAMLResponse', $SAMLResponse)
 
+				}
+
+				$LogonRequest['Body'] = $boundParameters
+				$LogonRequest['ContentType'] = 'application/x-www-form-urlencoded'
+				$LogonRequest['Uri'] = "$Uri/api/auth/SAML/Logon"
+				break
+
+			}
+
+			'Gen2SAMLAuth2' {
+
+				#*For SAML auth with pre-authenticated WebSession
+				#The WebSession already contains the necessary cookies
+				#The expected parameters are concurrentSession & SAMLResponse
+				$boundParameters = $PSBoundParameters | Get-PASParameter -ParametersToKeep concurrentSession, SAMLResponse
+
+				#add required parameters
+				$boundParameters.Add('apiUse', $true)
+
+				#If no SAMLResponse provided, include empty string (cookies may be sufficient)
+				if ( -not ($PSBoundParameters.ContainsKey('SAMLResponse'))) {
+					$boundParameters.Add('SAMLResponse', '')
 				}
 
 				$LogonRequest['Body'] = $boundParameters
