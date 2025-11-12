@@ -113,7 +113,8 @@ function ConvertTo-PASWebSession {
 					Write-Verbose "[ConvertTo-PASWebSession] Added cookie: $($cookie.Name) = $cookieValuePreview (Domain: $($cookie.Domain), Path: $($cookie.Path), Secure: $($cookie.Secure), HttpOnly: $($cookie.HttpOnly))"
 
 				} catch {
-					Write-Warning "[ConvertTo-PASWebSession] Failed to add cookie $($cookieData.Name): $($_.Exception.Message)"
+					$errMsg = $_.Exception.Message
+					Write-Warning "[ConvertTo-PASWebSession] Failed to add cookie $($cookieData.Name): $errMsg"
 				}
 			}
 
@@ -143,7 +144,8 @@ function ConvertTo-PASWebSession {
 						Write-Verbose "[ConvertTo-PASWebSession] Added cookie: $cookieName = $cookieValuePreview"
 
 					} catch {
-						Write-Warning "[ConvertTo-PASWebSession] Failed to add cookie $cookieName: $($_.Exception.Message)"
+						$errMsg = $_.Exception.Message
+						Write-Warning "[ConvertTo-PASWebSession] Failed to add cookie ${cookieName}: $errMsg"
 					}
 				}
 			}
