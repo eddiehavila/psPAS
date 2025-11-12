@@ -458,17 +458,63 @@ function New-PASSession {
 		if ($PSCmdlet.ParameterSetName -eq 'Gen2SAMLAuth2') {
 			Write-Verbose "[SAMLAuth2] Using provided WebSession for authentication"
 			$LogonRequest['WebSession'] = $WebSession
-			# Log cookie information
+			# Log cookie information - enumerate ALL cookies without URI filtering
 			if ($WebSession.Cookies) {
 				try {
-					$cookieCount = @($WebSession.Cookies.GetCookies($baseURI)).Count
-					Write-Verbose "[SAMLAuth2] WebSession contains $cookieCount cookie(s) for base URI: $baseURI"
-					foreach ($cookie in $WebSession.Cookies.GetCookies($baseURI)) {
+					# Get all cookies without filtering by URI
+					$allCookies = @()
+
+					# Try to use GetAllCookies if available (PowerShell Core)
+					if ($WebSession.Cookies.PSObject.Methods['GetAllCookies']) {
+						$allCookies = $WebSession.Cookies.GetAllCookies()
+					} else {
+						# Fallback: Use reflection to access internal cookie table
+						$cookieCollection = $WebSession.Cookies.GetType().InvokeMember(
+							'm_domainTable',
+							[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
+							$null,
+							$WebSession.Cookies,
+							$null
+						)
+						if ($cookieCollection) {
+							foreach ($domain in $cookieCollection.Values) {
+								$pathTable = $domain.GetType().InvokeMember(
+									'm_list',
+									[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
+									$null,
+									$domain,
+									$null
+								)
+								if ($pathTable) {
+									foreach ($path in $pathTable.Values) {
+										foreach ($cookie in $path.Values) {
+											$allCookies += $cookie
+										}
+									}
+								}
+							}
+						}
+					}
+
+					$cookieCount = $allCookies.Count
+					Write-Verbose "[SAMLAuth2] WebSession contains $cookieCount cookie(s) total (all domains/paths)"
+					foreach ($cookie in $allCookies) {
 						$cookieValuePreview = if ($cookie.Value.Length -gt 20) { $cookie.Value.Substring(0, 20) + "..." } else { $cookie.Value }
 						Write-Verbose "[SAMLAuth2]   Cookie: $($cookie.Name) = $cookieValuePreview (Domain: $($cookie.Domain), Path: $($cookie.Path), Secure: $($cookie.Secure), HttpOnly: $($cookie.HttpOnly))"
 					}
 				} catch {
-					Write-Verbose "[SAMLAuth2] Could not enumerate cookies: $($_.Exception.Message)"
+					Write-Verbose "[SAMLAuth2] Could not enumerate all cookies: $($_.Exception.Message)"
+					# Fallback to URI-filtered enumeration
+					try {
+						$filteredCookies = @($WebSession.Cookies.GetCookies($baseURI))
+						Write-Verbose "[SAMLAuth2] Fallback: WebSession contains $($filteredCookies.Count) cookie(s) for base URI: $baseURI"
+						foreach ($cookie in $filteredCookies) {
+							$cookieValuePreview = if ($cookie.Value.Length -gt 20) { $cookie.Value.Substring(0, 20) + "..." } else { $cookie.Value }
+							Write-Verbose "[SAMLAuth2]   Cookie: $($cookie.Name) = $cookieValuePreview (Domain: $($cookie.Domain), Path: $($cookie.Path), Secure: $($cookie.Secure), HttpOnly: $($cookie.HttpOnly))"
+						}
+					} catch {
+						Write-Verbose "[SAMLAuth2] Could not enumerate cookies by URI either: $($_.Exception.Message)"
+					}
 				}
 			} else {
 				Write-Verbose "[SAMLAuth2] WARNING: WebSession has no Cookies collection"
