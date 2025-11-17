@@ -152,8 +152,9 @@ function Set-PASSession {
 						if (-not $psPASSession.WebSession.Headers) {
 							$psPASSession.WebSession.Headers = @{}
 						}
-						$psPASSession.WebSession.Headers['X-CA88888'] = $cookie.Value
-						Write-Verbose "[Set-PASSession] Added X-CA88888 header: $($cookie.Value.Substring(0, [Math]::Min(20, $cookie.Value.Length)))..."
+						# CyberArk expects the session token in the Authorization header
+						$psPASSession.WebSession.Headers['Authorization'] = $cookie.Value
+						Write-Verbose "[Set-PASSession] Added Authorization header with CA88888 value: $($cookie.Value.Substring(0, [Math]::Min(20, $cookie.Value.Length)))..."
 					}
 					elseif ($cookie.Name -eq 'CA66666') {
 						if (-not $psPASSession.WebSession.Headers) {
@@ -175,15 +176,15 @@ function Set-PASSession {
 				}
 			}
 
-			# Add Authorization header to WebSession if AuthToken is provided
+			# Add Authorization header to WebSession if AuthToken is provided (overrides CA88888 cookie value)
 			if ($PSBoundParameters.ContainsKey('AuthToken') -and -not [string]::IsNullOrEmpty($AuthToken)) {
 				if (-not $psPASSession.WebSession.Headers) {
 					$psPASSession.WebSession.Headers = @{}
 				}
 				$psPASSession.WebSession.Headers['Authorization'] = $AuthToken
-				Write-Verbose "[Set-PASSession] Authorization header set to provided token"
-			} else {
-				Write-Verbose "[Set-PASSession] No AuthToken provided - relying on cookies for authentication"
+				Write-Verbose "[Set-PASSession] Authorization header overridden with provided AuthToken"
+			} elseif (-not $psPASSession.WebSession.Headers.ContainsKey('Authorization')) {
+				Write-Verbose "[Set-PASSession] No Authorization header set - relying on cookies only"
 			}
 
 			# CookieContainer assignment complete
