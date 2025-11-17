@@ -224,6 +224,22 @@
 
 		}
 
+		# Log cookies that will be sent with this request (if WebSession is used)
+		if ($PSBoundParameters.ContainsKey('WebSession') -and $null -ne $PSBoundParameters['WebSession'].Cookies) {
+			try {
+				$requestUri = [Uri]$URI
+				$cookiesForRequest = $PSBoundParameters['WebSession'].Cookies.GetCookies($requestUri)
+				Write-Verbose "[Invoke-PASRestMethod] Request URI: $URI"
+				Write-Verbose "[Invoke-PASRestMethod] Cookies for this request: $($cookiesForRequest.Count)"
+				foreach ($c in $cookiesForRequest) {
+					$cookieValuePreview = if ($c.Value.Length -gt 20) { $c.Value.Substring(0, 20) + '...' } else { $c.Value }
+					Write-Verbose "[Invoke-PASRestMethod]   Cookie: $($c.Name) = $cookieValuePreview (Domain: $($c.Domain), Path: $($c.Path))"
+				}
+			} catch {
+				Write-Verbose "[Invoke-PASRestMethod] Could not enumerate cookies for request: $($_.Exception.Message)"
+			}
+		}
+
 		try {
 
 			#make web request, splat PSBoundParameters
