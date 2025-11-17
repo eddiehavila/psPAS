@@ -174,18 +174,18 @@ function ConvertTo-PASWebSession {
 			} else {
 				Write-Verbose "[ConvertTo-PASWebSession] Using reflection to enumerate cookies"
 				# Use reflection
-				$cookieCollection = $webSession.Cookies.GetType().InvokeMember(
+				$domainTable = $webSession.Cookies.GetType().InvokeMember(
 					'm_domainTable',
 					[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
 					$null,
 					$webSession.Cookies,
 					$null
 				)
-				Write-Verbose "[ConvertTo-PASWebSession] m_domainTable has $($cookieCollection.Count) domains"
-				if ($cookieCollection) {
-					foreach ($domain in $cookieCollection.Keys) {
+				Write-Verbose "[ConvertTo-PASWebSession] m_domainTable has $($domainTable.Count) domains"
+				if ($domainTable) {
+					foreach ($domain in $domainTable.Keys) {
 						Write-Verbose "[ConvertTo-PASWebSession]   Domain: $domain"
-						$domainObj = $cookieCollection[$domain]
+						$domainObj = $domainTable[$domain]
 						$pathTable = $domainObj.GetType().InvokeMember(
 							'm_list',
 							[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
@@ -200,7 +200,7 @@ function ConvertTo-PASWebSession {
 								$pathList = $pathTable[$path]
 
 								# PathList object contains m_list which is a SortedList of cookies
-								$cookieCollection = $pathList.GetType().InvokeMember(
+								$pathCookieList = $pathList.GetType().InvokeMember(
 									'm_list',
 									[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
 									$null,
@@ -208,10 +208,10 @@ function ConvertTo-PASWebSession {
 									$null
 								)
 
-								if ($cookieCollection) {
-									$pathCookieCount = @($cookieCollection.Values).Count
+								if ($pathCookieList) {
+									$pathCookieCount = @($pathCookieList.Values).Count
 									Write-Verbose "[ConvertTo-PASWebSession]         $pathCookieCount cookies"
-									foreach ($c in $cookieCollection.Values) {
+									foreach ($c in $pathCookieList.Values) {
 										Write-Verbose "[ConvertTo-PASWebSession]           Enumerated: $($c.Name)"
 									}
 									$finalCount += $pathCookieCount
