@@ -138,10 +138,12 @@ function Set-PASSession {
 			Write-Verbose "[Set-PASSession] Extracting CyberArk session cookies for headers"
 			try {
 				# Use GetCookies with the base URI to get cookies that match
-				$requestUri = [Uri]$Uri
+				# IMPORTANT: Add trailing slash to ensure cookies with Path=/PasswordVault/ are matched
+				$uriWithSlash = if ($Uri.EndsWith('/')) { $Uri } else { "$Uri/" }
+				$requestUri = [Uri]$uriWithSlash
 				$cookiesForUri = $psPASSession.WebSession.Cookies.GetCookies($requestUri)
 
-				Write-Verbose "[Set-PASSession] Found $($cookiesForUri.Count) cookies matching URI: $Uri"
+				Write-Verbose "[Set-PASSession] Found $($cookiesForUri.Count) cookies matching URI: $uriWithSlash"
 
 				# Extract CA88888 and CA66666 cookies and add as headers
 				foreach ($cookie in $cookiesForUri) {
