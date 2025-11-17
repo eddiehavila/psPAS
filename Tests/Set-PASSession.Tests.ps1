@@ -78,7 +78,7 @@ Describe $($PSCommandPath -Replace '.Tests.ps1') {
 
 			It 'sets the WebSession' {
 				Set-PASSession -BaseURI 'https://pvwa.company.com' -WebSession $testWebSession -AuthToken $testAuthToken
-				$psPASSession.WebSession | Should -Be $testWebSession
+				$psPASSession.WebSession | Should -Not -BeNullOrEmpty
 			}
 
 			It 'sets the Authorization header' {
@@ -134,6 +134,27 @@ Describe $($PSCommandPath -Replace '.Tests.ps1') {
 			It 'removes /PasswordVault from BaseURI if provided' {
 				Set-PASSession -BaseURI 'https://pvwa.company.com/PasswordVault' -WebSession $testWebSession -AuthToken $testAuthToken
 				$psPASSession.BaseURI | Should -Be 'https://pvwa.company.com/PasswordVault'
+			}
+
+			It 'copies cookies from input WebSession' {
+				# Create a test WebSession with cookies
+				$testWebSessionWithCookies = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+				$testCookie = New-Object System.Net.Cookie
+				$testCookie.Name = 'TestCookie'
+				$testCookie.Value = 'TestValue'
+				$testCookie.Domain = 'pvwa.company.com'
+				$testCookie.Path = '/'
+				$testWebSessionWithCookies.Cookies.Add($testCookie)
+
+				Set-PASSession -BaseURI 'https://pvwa.company.com' -WebSession $testWebSessionWithCookies -AuthToken $testAuthToken
+
+				# Verify cookie was copied
+				$copiedCookies = @()
+				if ($psPASSession.WebSession.Cookies.PSObject.Methods['GetAllCookies']) {
+					$copiedCookies = $psPASSession.WebSession.Cookies.GetAllCookies()
+				}
+				$copiedCookies.Count | Should -BeGreaterThan 0
+				$copiedCookies[0].Name | Should -Be 'TestCookie'
 			}
 
 		}
