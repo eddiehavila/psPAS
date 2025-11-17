@@ -133,6 +133,34 @@ function Set-PASSession {
 				Write-Warning "[Set-PASSession] Failed to assign CookieContainer: $cookieErr"
 			}
 
+			# Extract CA88888 and CA66666 cookie values and set as headers
+			# CyberArk requires session cookies to be sent as both cookies AND headers
+			Write-Verbose "[Set-PASSession] Extracting CyberArk session cookies for headers"
+			try {
+				$requestUri = [Uri]$Uri
+				$allCookies = $psPASSession.WebSession.Cookies.GetCookies($requestUri)
+
+				foreach ($cookie in $allCookies) {
+					if ($cookie.Name -eq 'CA88888') {
+						if (-not $psPASSession.WebSession.Headers) {
+							$psPASSession.WebSession.Headers = @{}
+						}
+						$psPASSession.WebSession.Headers['X-CA88888'] = $cookie.Value
+						Write-Verbose "[Set-PASSession] Added X-CA88888 header: $($cookie.Value.Substring(0, [Math]::Min(20, $cookie.Value.Length)))..."
+					}
+					elseif ($cookie.Name -eq 'CA66666') {
+						if (-not $psPASSession.WebSession.Headers) {
+							$psPASSession.WebSession.Headers = @{}
+						}
+						$psPASSession.WebSession.Headers['X-CA66666'] = $cookie.Value
+						Write-Verbose "[Set-PASSession] Added X-CA66666 header: $($cookie.Value.Substring(0, [Math]::Min(20, $cookie.Value.Length)))..."
+					}
+				}
+			} catch {
+				$headerErr = $_.Exception.Message
+				Write-Warning "[Set-PASSession] Could not extract session cookies for headers: $headerErr"
+			}
+
 			# Copy headers from input WebSession to psPAS WebSession
 			if ($WebSession.Headers) {
 				foreach ($headerKey in $WebSession.Headers.Keys) {
