@@ -238,6 +238,28 @@
 			} catch {
 				Write-Verbose "[Invoke-PASRestMethod] Could not enumerate cookies for request: $($_.Exception.Message)"
 			}
+
+			# Log headers that will be sent with this request
+			if ($null -ne $PSBoundParameters['WebSession'].Headers -and $PSBoundParameters['WebSession'].Headers.Count -gt 0) {
+				Write-Verbose "[Invoke-PASRestMethod] WebSession Headers: $($PSBoundParameters['WebSession'].Headers.Count)"
+				foreach ($headerKey in $PSBoundParameters['WebSession'].Headers.Keys) {
+					$headerValue = $PSBoundParameters['WebSession'].Headers[$headerKey]
+					$headerValuePreview = if ($headerValue.Length -gt 30) { $headerValue.Substring(0, 30) + '...' } else { $headerValue }
+					Write-Verbose "[Invoke-PASRestMethod]   Header: $headerKey = $headerValuePreview"
+				}
+			} else {
+				Write-Verbose "[Invoke-PASRestMethod] WebSession has NO headers"
+			}
+		}
+
+		# Log additional headers parameter if provided
+		if ($PSBoundParameters.ContainsKey('Headers') -and $null -ne $PSBoundParameters['Headers'] -and $PSBoundParameters['Headers'].Count -gt 0) {
+			Write-Verbose "[Invoke-PASRestMethod] Additional Headers parameter: $($PSBoundParameters['Headers'].Count)"
+			foreach ($headerKey in $PSBoundParameters['Headers'].Keys) {
+				$headerValue = $PSBoundParameters['Headers'][$headerKey]
+				$headerValuePreview = if ($headerValue.Length -gt 30) { $headerValue.Substring(0, 30) + '...' } else { $headerValue }
+				Write-Verbose "[Invoke-PASRestMethod]   Header: $headerKey = $headerValuePreview"
+			}
 		}
 
 		try {
