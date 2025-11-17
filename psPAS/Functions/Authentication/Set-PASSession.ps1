@@ -19,7 +19,8 @@ function Set-PASSession {
 	An authenticated WebRequestSession object containing valid cookies and session data
 
 	.PARAMETER AuthToken
-	The authentication token (e.g., SAML token, bearer token) to use for API requests
+	Optional authentication token (e.g., SAML token, bearer token) to use for API requests.
+	If not provided, the function relies on cookies in the WebSession for authentication.
 
 	.PARAMETER SkipVersionCheck
 	Skip checking the CyberArk server version
@@ -41,6 +42,11 @@ function Set-PASSession {
 	.EXAMPLE
 	# Initialize session without checking version or user
 	Set-PASSession -BaseURI "https://pvwa.company.com" -WebSession $webSession -AuthToken $authToken -SkipVersionCheck -SkipUserCheck
+
+	.EXAMPLE
+	# Initialize session using only cookies (no AuthToken) - useful when already authenticated via browser
+	$webSession = ConvertTo-PASWebSession -Cookies $authResponse.cookies -BaseURI "https://pvwa.company.com"
+	Set-PASSession -BaseURI "https://pvwa.company.com" -WebSession $webSession
 
 	.NOTES
 	This function is designed for scenarios where authentication has already been completed
@@ -64,7 +70,7 @@ function Set-PASSession {
 		[Microsoft.PowerShell.Commands.WebRequestSession]$WebSession,
 
 		[Parameter(
-			Mandatory = $true,
+			Mandatory = $false,
 			ValueFromPipeline = $false,
 			ValueFromPipelinebyPropertyName = $true
 		)]
@@ -110,13 +116,16 @@ function Set-PASSession {
 			# Set the WebSession in module scope
 			$psPASSession.WebSession = $WebSession
 
-			# Add Authorization header to WebSession
-			if (-not $psPASSession.WebSession.Headers) {
-				$psPASSession.WebSession.Headers = @{}
+			# Add Authorization header to WebSession if AuthToken is provided
+			if ($PSBoundParameters.ContainsKey('AuthToken') -and -not [string]::IsNullOrEmpty($AuthToken)) {
+				if (-not $psPASSession.WebSession.Headers) {
+					$psPASSession.WebSession.Headers = @{}
+				}
+				$psPASSession.WebSession.Headers['Authorization'] = $AuthToken
+				Write-Verbose "[Set-PASSession] Authorization header set to provided token"
+			} else {
+				Write-Verbose "[Set-PASSession] No AuthToken provided - relying on cookies for authentication"
 			}
-			$psPASSession.WebSession.Headers['Authorization'] = $AuthToken
-
-			Write-Verbose "[Set-PASSession] Authorization header set"
 
 			# Log cookie information
 			if ($WebSession.Cookies) {
