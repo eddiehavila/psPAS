@@ -74,6 +74,7 @@ function Set-PASSession {
 			ValueFromPipeline = $false,
 			ValueFromPipelinebyPropertyName = $true
 		)]
+		[AllowEmptyString()]
 		[string]$AuthToken,
 
 		[Parameter(
