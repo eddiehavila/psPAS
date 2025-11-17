@@ -152,9 +152,11 @@ function Set-PASSession {
 						if (-not $psPASSession.WebSession.Headers) {
 							$psPASSession.WebSession.Headers = @{}
 						}
-						# CyberArk expects the session token in the Authorization header
-						$psPASSession.WebSession.Headers['Authorization'] = $cookie.Value
-						Write-Verbose "[Set-PASSession] Added Authorization header with CA88888 value: $($cookie.Value.Substring(0, [Math]::Min(20, $cookie.Value.Length)))..."
+						# CyberArk expects the session token in the Authorization header, Base64 encoded
+						$tokenBytes = [System.Text.Encoding]::UTF8.GetBytes($cookie.Value)
+						$base64Token = [System.Convert]::ToBase64String($tokenBytes)
+						$psPASSession.WebSession.Headers['Authorization'] = $base64Token
+						Write-Verbose "[Set-PASSession] Added Authorization header with Base64-encoded CA88888 value: $($base64Token.Substring(0, [Math]::Min(30, $base64Token.Length)))..."
 					}
 					elseif ($cookie.Name -eq 'CA66666') {
 						if (-not $psPASSession.WebSession.Headers) {
