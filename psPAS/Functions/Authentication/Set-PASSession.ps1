@@ -121,13 +121,21 @@ function Set-PASSession {
 
 			# Explicitly copy all cookies from input WebSession to psPAS WebSession
 			Write-Verbose "[Set-PASSession] Copying cookies from input WebSession"
+			Write-Verbose "[Set-PASSession] Input WebSession type: $($WebSession.GetType().FullName)"
+			Write-Verbose "[Set-PASSession] Input WebSession.Cookies type: $($WebSession.Cookies.GetType().FullName)"
 			try {
 				$cookiesToCopy = @()
 
+				# Check if GetAllCookies method exists
+				$hasGetAllCookies = $null -ne $WebSession.Cookies.PSObject.Methods['GetAllCookies']
+				Write-Verbose "[Set-PASSession] GetAllCookies method available: $hasGetAllCookies"
+
 				# Try to use GetAllCookies if available (PowerShell Core)
-				if ($WebSession.Cookies.PSObject.Methods['GetAllCookies']) {
-					$cookiesToCopy = $WebSession.Cookies.GetAllCookies()
+				if ($hasGetAllCookies) {
+					$cookiesToCopy = @($WebSession.Cookies.GetAllCookies())
+					Write-Verbose "[Set-PASSession] GetAllCookies returned $($cookiesToCopy.Count) cookies"
 				} else {
+					Write-Verbose "[Set-PASSession] Using reflection to enumerate cookies"
 					# Fallback: Use reflection to access internal cookie table
 					$cookieCollection = $WebSession.Cookies.GetType().InvokeMember(
 						'm_domainTable',
@@ -136,18 +144,28 @@ function Set-PASSession {
 						$WebSession.Cookies,
 						$null
 					)
+					Write-Verbose "[Set-PASSession] m_domainTable type: $($cookieCollection.GetType().FullName)"
+					Write-Verbose "[Set-PASSession] m_domainTable has $($cookieCollection.Count) domains"
 					if ($cookieCollection) {
-						foreach ($domain in $cookieCollection.Values) {
-							$pathTable = $domain.GetType().InvokeMember(
+						foreach ($domain in $cookieCollection.Keys) {
+							Write-Verbose "[Set-PASSession]   Domain: $domain"
+							$domainObj = $cookieCollection[$domain]
+							$pathTable = $domainObj.GetType().InvokeMember(
 								'm_list',
 								[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
 								$null,
-								$domain,
+								$domainObj,
 								$null
 							)
+							Write-Verbose "[Set-PASSession]     Path table has $($pathTable.Count) paths"
 							if ($pathTable) {
-								foreach ($path in $pathTable.Values) {
-									foreach ($cookie in $path.Values) {
+								foreach ($path in $pathTable.Keys) {
+									Write-Verbose "[Set-PASSession]       Path: $path"
+									$cookieList = $pathTable[$path]
+									$pathCookieCount = @($cookieList.Values).Count
+									Write-Verbose "[Set-PASSession]         $pathCookieCount cookies in this path"
+									foreach ($cookie in $cookieList.Values) {
+										Write-Verbose "[Set-PASSession]           Found: $($cookie.Name)"
 										$cookiesToCopy += $cookie
 									}
 								}

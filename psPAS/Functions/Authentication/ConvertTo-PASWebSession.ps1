@@ -155,12 +155,24 @@ function ConvertTo-PASWebSession {
 
 	end {
 
-		# Get final cookie count
+		# Get final cookie count and detailed diagnostics
 		$finalCount = 0
 		try {
-			if ($webSession.Cookies.PSObject.Methods['GetAllCookies']) {
-				$finalCount = @($webSession.Cookies.GetAllCookies()).Count
+			Write-Verbose "[ConvertTo-PASWebSession] Verifying cookies were added correctly"
+
+			# Check if GetAllCookies method exists
+			$hasGetAllCookies = $null -ne $webSession.Cookies.PSObject.Methods['GetAllCookies']
+			Write-Verbose "[ConvertTo-PASWebSession] GetAllCookies method available: $hasGetAllCookies"
+
+			if ($hasGetAllCookies) {
+				$allCookies = @($webSession.Cookies.GetAllCookies())
+				$finalCount = $allCookies.Count
+				Write-Verbose "[ConvertTo-PASWebSession] GetAllCookies returned $finalCount cookies"
+				foreach ($c in $allCookies) {
+					Write-Verbose "[ConvertTo-PASWebSession]   Enumerated: $($c.Name) on $($c.Domain)$($c.Path)"
+				}
 			} else {
+				Write-Verbose "[ConvertTo-PASWebSession] Using reflection to enumerate cookies"
 				# Use reflection
 				$cookieCollection = $webSession.Cookies.GetType().InvokeMember(
 					'm_domainTable',
@@ -169,18 +181,29 @@ function ConvertTo-PASWebSession {
 					$webSession.Cookies,
 					$null
 				)
+				Write-Verbose "[ConvertTo-PASWebSession] m_domainTable has $($cookieCollection.Count) domains"
 				if ($cookieCollection) {
-					foreach ($domain in $cookieCollection.Values) {
-						$pathTable = $domain.GetType().InvokeMember(
+					foreach ($domain in $cookieCollection.Keys) {
+						Write-Verbose "[ConvertTo-PASWebSession]   Domain: $domain"
+						$domainObj = $cookieCollection[$domain]
+						$pathTable = $domainObj.GetType().InvokeMember(
 							'm_list',
 							[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
 							$null,
-							$domain,
+							$domainObj,
 							$null
 						)
+						Write-Verbose "[ConvertTo-PASWebSession]     Path table has $($pathTable.Count) paths"
 						if ($pathTable) {
-							foreach ($path in $pathTable.Values) {
-								$finalCount += @($path.Values).Count
+							foreach ($path in $pathTable.Keys) {
+								Write-Verbose "[ConvertTo-PASWebSession]       Path: $path"
+								$cookieList = $pathTable[$path]
+								$pathCookieCount = @($cookieList.Values).Count
+								Write-Verbose "[ConvertTo-PASWebSession]         $pathCookieCount cookies"
+								foreach ($c in $cookieList.Values) {
+									Write-Verbose "[ConvertTo-PASWebSession]           Enumerated: $($c.Name)"
+								}
+								$finalCount += $pathCookieCount
 							}
 						}
 					}
