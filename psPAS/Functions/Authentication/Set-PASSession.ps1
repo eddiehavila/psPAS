@@ -119,84 +119,18 @@ function Set-PASSession {
 				$psPASSession.WebSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 			}
 
-			# Explicitly copy all cookies from input WebSession to psPAS WebSession
-			Write-Verbose "[Set-PASSession] Copying cookies from input WebSession"
-			Write-Verbose "[Set-PASSession] Input WebSession type: $($WebSession.GetType().FullName)"
-			Write-Verbose "[Set-PASSession] Input WebSession.Cookies type: $($WebSession.Cookies.GetType().FullName)"
+			# Directly assign the CookieContainer from input WebSession to psPAS WebSession
+			# This preserves all cookies without needing to enumerate/copy them individually
+			Write-Verbose "[Set-PASSession] Assigning CookieContainer from input WebSession"
 			try {
-				$cookiesToCopy = @()
-
-				# Check if GetAllCookies method exists
-				$hasGetAllCookies = $null -ne $WebSession.Cookies.PSObject.Methods['GetAllCookies']
-				Write-Verbose "[Set-PASSession] GetAllCookies method available: $hasGetAllCookies"
-
-				# Try to use GetAllCookies if available (PowerShell Core)
-				if ($hasGetAllCookies) {
-					$cookiesToCopy = @($WebSession.Cookies.GetAllCookies())
-					Write-Verbose "[Set-PASSession] GetAllCookies returned $($cookiesToCopy.Count) cookies"
-				} else {
-					Write-Verbose "[Set-PASSession] Using reflection to enumerate cookies"
-					# Fallback: Use reflection to access internal cookie table
-					$cookieCollection = $WebSession.Cookies.GetType().InvokeMember(
-						'm_domainTable',
-						[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
-						$null,
-						$WebSession.Cookies,
-						$null
-					)
-					Write-Verbose "[Set-PASSession] m_domainTable type: $($cookieCollection.GetType().FullName)"
-					Write-Verbose "[Set-PASSession] m_domainTable has $($cookieCollection.Count) domains"
-					if ($cookieCollection) {
-						foreach ($domain in $cookieCollection.Keys) {
-							Write-Verbose "[Set-PASSession]   Domain: $domain"
-							$domainObj = $cookieCollection[$domain]
-							$pathTable = $domainObj.GetType().InvokeMember(
-								'm_list',
-								[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
-								$null,
-								$domainObj,
-								$null
-							)
-							Write-Verbose "[Set-PASSession]     Path table has $($pathTable.Count) paths"
-							if ($pathTable) {
-								foreach ($path in $pathTable.Keys) {
-									Write-Verbose "[Set-PASSession]       Path: $path"
-									$pathList = $pathTable[$path]
-
-									# PathList object contains m_list which is a SortedList of cookies
-									$cookieCollection = $pathList.GetType().InvokeMember(
-										'm_list',
-										[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
-										$null,
-										$pathList,
-										$null
-									)
-
-									if ($cookieCollection) {
-										$pathCookieCount = @($cookieCollection.Values).Count
-										Write-Verbose "[Set-PASSession]         $pathCookieCount cookies in this path"
-										foreach ($cookie in $cookieCollection.Values) {
-											Write-Verbose "[Set-PASSession]           Found: $($cookie.Name)"
-											$cookiesToCopy += $cookie
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-
-				Write-Verbose "[Set-PASSession] Found $($cookiesToCopy.Count) cookies to copy from input WebSession"
-
-				foreach ($cookie in $cookiesToCopy) {
-					$psPASSession.WebSession.Cookies.Add($cookie)
-					$cookieValuePreview = if ($cookie.Value.Length -gt 20) { $cookie.Value.Substring(0, 20) + '...' } else { $cookie.Value }
-					Write-Verbose "[Set-PASSession]   Copied cookie: $($cookie.Name) = $cookieValuePreview (Domain: $($cookie.Domain), Path: $($cookie.Path))"
-				}
-
+				# Direct assignment of the CookieContainer reference
+				$psPASSession.WebSession.Cookies = $WebSession.Cookies
+				Write-Verbose "[Set-PASSession] CookieContainer assigned successfully"
+				Write-Verbose "[Set-PASSession] CookieContainer Capacity: $($psPASSession.WebSession.Cookies.Capacity)"
+				Write-Verbose "[Set-PASSession] CookieContainer Count: $($psPASSession.WebSession.Cookies.Count)"
 			} catch {
-				$copyErr = $_.Exception.Message
-				Write-Warning "[Set-PASSession] Failed to copy cookies: $copyErr"
+				$cookieErr = $_.Exception.Message
+				Write-Warning "[Set-PASSession] Failed to assign CookieContainer: $cookieErr"
 			}
 
 			# Copy headers from input WebSession to psPAS WebSession
@@ -217,8 +151,8 @@ function Set-PASSession {
 				Write-Verbose "[Set-PASSession] No AuthToken provided - relying on cookies for authentication"
 			}
 
-			# Verify cookies were copied successfully
-			Write-Verbose "[Set-PASSession] Cookie copy complete"
+			# CookieContainer assignment complete
+			Write-Verbose "[Set-PASSession] CookieContainer assignment complete"
 
 			# Record Session Start Time
 			$psPASSession.StartTime = Get-Date
