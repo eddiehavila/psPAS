@@ -161,12 +161,24 @@ function Set-PASSession {
 							if ($pathTable) {
 								foreach ($path in $pathTable.Keys) {
 									Write-Verbose "[Set-PASSession]       Path: $path"
-									$cookieList = $pathTable[$path]
-									$pathCookieCount = @($cookieList.Values).Count
-									Write-Verbose "[Set-PASSession]         $pathCookieCount cookies in this path"
-									foreach ($cookie in $cookieList.Values) {
-										Write-Verbose "[Set-PASSession]           Found: $($cookie.Name)"
-										$cookiesToCopy += $cookie
+									$pathList = $pathTable[$path]
+
+									# PathList object contains m_list which is a SortedList of cookies
+									$cookieCollection = $pathList.GetType().InvokeMember(
+										'm_list',
+										[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
+										$null,
+										$pathList,
+										$null
+									)
+
+									if ($cookieCollection) {
+										$pathCookieCount = @($cookieCollection.Values).Count
+										Write-Verbose "[Set-PASSession]         $pathCookieCount cookies in this path"
+										foreach ($cookie in $cookieCollection.Values) {
+											Write-Verbose "[Set-PASSession]           Found: $($cookie.Name)"
+											$cookiesToCopy += $cookie
+										}
 									}
 								}
 							}

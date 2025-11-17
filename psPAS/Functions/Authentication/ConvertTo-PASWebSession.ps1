@@ -197,13 +197,25 @@ function ConvertTo-PASWebSession {
 						if ($pathTable) {
 							foreach ($path in $pathTable.Keys) {
 								Write-Verbose "[ConvertTo-PASWebSession]       Path: $path"
-								$cookieList = $pathTable[$path]
-								$pathCookieCount = @($cookieList.Values).Count
-								Write-Verbose "[ConvertTo-PASWebSession]         $pathCookieCount cookies"
-								foreach ($c in $cookieList.Values) {
-									Write-Verbose "[ConvertTo-PASWebSession]           Enumerated: $($c.Name)"
+								$pathList = $pathTable[$path]
+
+								# PathList object contains m_list which is a SortedList of cookies
+								$cookieCollection = $pathList.GetType().InvokeMember(
+									'm_list',
+									[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
+									$null,
+									$pathList,
+									$null
+								)
+
+								if ($cookieCollection) {
+									$pathCookieCount = @($cookieCollection.Values).Count
+									Write-Verbose "[ConvertTo-PASWebSession]         $pathCookieCount cookies"
+									foreach ($c in $cookieCollection.Values) {
+										Write-Verbose "[ConvertTo-PASWebSession]           Enumerated: $($c.Name)"
+									}
+									$finalCount += $pathCookieCount
 								}
-								$finalCount += $pathCookieCount
 							}
 						}
 					}
