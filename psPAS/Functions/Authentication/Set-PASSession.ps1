@@ -137,9 +137,61 @@ function Set-PASSession {
 			# CyberArk requires session cookies to be sent as both cookies AND headers
 			Write-Verbose "[Set-PASSession] Extracting CyberArk session cookies for headers"
 			try {
-				$requestUri = [Uri]$Uri
-				$allCookies = $psPASSession.WebSession.Cookies.GetCookies($requestUri)
+				$allCookies = @()
 
+				# Check if GetAllCookies method exists (PowerShell Core)
+				$hasGetAllCookies = $null -ne $psPASSession.WebSession.Cookies.PSObject.Methods['GetAllCookies']
+
+				if ($hasGetAllCookies) {
+					# PowerShell Core
+					$allCookies = @($psPASSession.WebSession.Cookies.GetAllCookies())
+					Write-Verbose "[Set-PASSession] Found $($allCookies.Count) total cookies using GetAllCookies"
+				} else {
+					# Windows PowerShell - use reflection to enumerate ALL cookies
+					Write-Verbose "[Set-PASSession] Using reflection to enumerate all cookies"
+					$domainTable = $psPASSession.WebSession.Cookies.GetType().InvokeMember(
+						'm_domainTable',
+						[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
+						$null,
+						$psPASSession.WebSession.Cookies,
+						$null
+					)
+
+					if ($domainTable) {
+						foreach ($domain in $domainTable.Keys) {
+							$domainObj = $domainTable[$domain]
+							$pathTable = $domainObj.GetType().InvokeMember(
+								'm_list',
+								[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
+								$null,
+								$domainObj,
+								$null
+							)
+
+							if ($pathTable) {
+								foreach ($path in $pathTable.Keys) {
+									$pathList = $pathTable[$path]
+									$pathCookieList = $pathList.GetType().InvokeMember(
+										'm_list',
+										[System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::GetField -bor [System.Reflection.BindingFlags]::Instance,
+										$null,
+										$pathList,
+										$null
+									)
+
+									if ($pathCookieList) {
+										foreach ($cookie in $pathCookieList.Values) {
+											$allCookies += $cookie
+										}
+									}
+								}
+							}
+						}
+					}
+					Write-Verbose "[Set-PASSession] Found $($allCookies.Count) total cookies using reflection"
+				}
+
+				# Now extract CA88888 and CA66666 cookies and add as headers
 				foreach ($cookie in $allCookies) {
 					if ($cookie.Name -eq 'CA88888') {
 						if (-not $psPASSession.WebSession.Headers) {
